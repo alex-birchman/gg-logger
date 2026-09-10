@@ -40,7 +40,10 @@ import { GgSession, sendGameLoaded } from './sdk/index.js';
 // лоадер приложения гасим сразу, даже если коннектор недоступен
 sendGameLoaded();
 
-const CONNECTOR = 'https://pride-biol-interference-arrivals.trycloudflare.com';
+const CONNECTOR = 'https://1ac9-5-152-127-109.ngrok-free.app';
+// free-ngrok показывает браузерам HTML-заглушку без этого заголовка
+const fetchImpl = (url, init = {}) =>
+  fetch(url, { ...init, headers: { ...(init.headers ?? {}), 'ngrok-skip-browser-warning': '1' } });
 const $ = (id) => document.getElementById(id);
 const status = (m) => { $('status').textContent = m; };
 
@@ -61,7 +64,7 @@ async function newRun() {
   $('verdict').className = '';
   $('again').style.display = 'none';
   status('открываю сессию…');
-  session = await GgSession.init('pizza-tower', { connectorUrl: CONNECTOR, launchParams });
+  session = await GgSession.init('pizza-tower', { connectorUrl: CONNECTOR, launchParams, fetchImpl });
   session.track('run_started');
   $('player').textContent = `игрок: ${session.player.username ?? session.player.clientId}`
     + (real ? ' (identity от приложения ✅)' : ' (identity подделана браузером)');
