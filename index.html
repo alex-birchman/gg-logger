@@ -2,14 +2,15 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>GG Logger</title>
 <style>
   body { margin: 0; font: 12px/1.5 ui-monospace, Menlo, monospace; background: #111; color: #d6ffd6; }
-  header { position: sticky; top: 0; background: #1c1c1c; padding: 10px 12px; display: flex; gap: 8px; align-items: center; border-bottom: 1px solid #333; }
-  h1 { font-size: 14px; margin: 0; flex: 1; color: #fff; }
-  button { font: inherit; background: #2e7d32; color: #fff; border: 0; border-radius: 6px; padding: 8px 12px; }
-  #log { padding: 10px 12px 60px; word-break: break-all; white-space: pre-wrap; }
+  header { position: sticky; top: 0; background: #1c1c1c; padding: calc(10px + env(safe-area-inset-top)) 12px 10px; border-bottom: 1px solid #333; }
+  h1 { font-size: 14px; margin: 0; color: #fff; }
+  footer { position: fixed; bottom: 0; left: 0; right: 0; background: #1c1c1c; border-top: 1px solid #333; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); display: flex; gap: 8px; }
+  button { font: inherit; background: #2e7d32; color: #fff; border: 0; border-radius: 6px; padding: 12px; flex: 1; }
+  #log { padding: 10px 12px 140px; word-break: break-all; white-space: pre-wrap; }
   .e { border-bottom: 1px dashed #333; padding: 4px 0; }
   .t { color: #7aa2f7; }
   .k { color: #ffd166; font-weight: bold; }
@@ -19,10 +20,12 @@
 <body>
 <header>
   <h1>🕵️ GG Logger</h1>
-  <button onclick="sendGameLoaded()" style="background:#1565c0">gameLoaded</button>
-  <button onclick="copyAll()">Копировать всё</button>
 </header>
 <div id="log"></div>
+<footer>
+  <button onclick="sendGameLoaded()" style="background:#1565c0">gameLoaded</button>
+  <button onclick="copyAll()">Копировать всё</button>
+</footer>
 <script>
 const entries = [];
 const logEl = document.getElementById('log');
@@ -77,12 +80,13 @@ iframe.style.display = 'none';
 document.body.appendChild(iframe);
 const cleanKeys = new Set(Object.getOwnPropertyNames(iframe.contentWindow));
 const ourKeys = new Set(['entries', 'log', 'safeJson', 'escapeHtml', 'copyAll', 'copyAllBtn',
+  'scanInjected', 'scanWebkit', 'wrapMethods', 'sendGameLoaded',
   'initGame', 'startGame', 'endGame', 'gameLoaded', 'setToken', 'setUser', 'init', 'configure']);
 const reported = new Set();
 
 function scanInjected(label) {
   Object.getOwnPropertyNames(window).forEach(k => {
-    if (cleanKeys.has(k) || ourKeys.has(k) || reported.has(k)) return;
+    if (cleanKeys.has(k) || ourKeys.has(k) || reported.has(k) || /^\d+$/.test(k)) return;
     reported.add(k);
     const v = window[k];
     let detail;
