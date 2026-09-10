@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Лови пиццу</title>
+<style>
+  :root{
+    --bg:#1b1030;--bg2:#2a1a4a;--panel:#241338;--line:#3d2a5c;
+    --ink:#f3ecff;--muted:#b6a3d8;--bad:#ff5d73;--accent:#8b6cff;--reward:#ffd45e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:radial-gradient(120% 100% at 50% 0%, var(--bg2) 0%, var(--bg) 60%);
+    color:var(--ink);font-family:"Segoe UI",system-ui,-apple-system,sans-serif;
+    display:flex;justify-content:center;min-height:100vh;padding:16px;
+  }
+  .wrap{width:100%;max-width:480px;display:flex;flex-direction:column;gap:12px}
+  header{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+  h1{font-size:22px;font-weight:800;letter-spacing:-0.02em}
+  h1 .em{font-weight:400}
+  .sub{color:var(--muted);font-size:12px}
+
+  .hud{display:flex;gap:8px}
+  .stat{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+  .stat .k{color:var(--muted);font-size:11px}
+  .stat .v{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}
+  .v.lives{color:var(--bad)}
+  .v.reward{color:var(--reward)}
+
+  .stage{position:relative;border-radius:16px;overflow:hidden;border:1px solid var(--line);
+    background:linear-gradient(180deg,#20143a 0%, #170d29 100%)}
+  #field{position:relative;width:100%;overflow:hidden}
+  .floor{position:absolute;left:0;right:0;bottom:0;height:14px;background:rgba(139,108,255,0.12)}
+
+  .sprite{position:absolute;left:0;top:0;line-height:1;user-select:none;pointer-events:none;will-change:transform;
+    font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif}
+  .player-glow{position:absolute;left:0;top:0;width:74px;height:74px;border-radius:50%;
+    background:radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.55) 45%, rgba(255,255,255,0) 72%);
+    pointer-events:none;will-change:transform}
+  .player{filter:drop-shadow(0 1px 2px rgba(0,0,0,0.35))}
+  .spark{position:absolute;left:0;top:0;width:6px;height:6px;border-radius:50%;pointer-events:none;will-change:transform,opacity}
+
+  .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:14px;text-align:center;background:rgba(14,8,26,0.82);backdrop-filter:blur(3px);padding:24px;z-index:5}
+  .overlay.hidden{display:none}
+  .overlay h2{font-size:26px;font-weight:800}
+  .overlay p{color:var(--muted);font-size:14px;max-width:300px;line-height:1.5}
+  .overlay .reward-line{color:var(--reward);font-weight:800;font-size:18px}
+  .big{font-size:40px;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif}
+
+  button{font:inherit;cursor:pointer;border:none;border-radius:12px;padding:12px 22px;font-weight:700;font-size:16px;
+    background:var(--accent);color:white;transition:transform .06s ease,filter .15s ease}
+  button:hover{filter:brightness(1.08)}
+  button:active{transform:translateY(1px)}
+  button.ghost{background:var(--panel);border:1px solid var(--line);color:var(--ink)}
+
+  .controls-hint{color:var(--muted);font-size:12px;text-align:center}
+  details.settings{background:var(--panel);border:1px solid var(--line);border-radius:12px}
+  details.settings>summary{list-style:none;cursor:pointer;padding:12px 14px;font-weight:700;display:flex;align-items:center;justify-content:space-between}
+  details.settings>summary::-webkit-details-marker{display:none}
+  details.settings>summary .chev{color:var(--muted);transition:transform .2s ease}
+  details.settings[open]>summary .chev{transform:rotate(180deg)}
+  .settings-body{padding:4px 14px 16px;display:flex;flex-direction:column;gap:16px}
+  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+  .field input[type=text]{width:100%;background:#170d29;border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:10px 12px;font-size:18px}
+  .field .desc{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.4}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .row .field{flex:1;min-width:120px}
+  .settings-body .apply{align-self:flex-start}
+  .diff{display:flex;gap:8px}
+  .diff button{flex:1;padding:9px;font-size:14px;background:#170d29;border:1px solid var(--line);color:var(--muted);font-weight:600}
+  .diff button.on{background:var(--accent);color:white;border-color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Лови пиццу <span class="em">🍕</span></h1>
+    <div class="sub">лови вкусное · пропускай тараканов</div>
+  </header>
+
+  <div class="hud">
+    <div class="stat"><div class="k">Счёт</div><div class="v" id="score">0</div></div>
+    <div class="stat"><div class="k" id="rewardLabel">Билетики</div><div class="v reward" id="reward">0</div></div>
+    <div class="stat"><div class="k">Жизни</div><div class="v lives" id="lives">❤❤❤</div></div>
+  </div>
+
+  <div class="stage">
+    <div id="field"></div>
+    <div class="overlay" id="overlay">
+      <div class="big">🍕</div>
+      <h2 id="ovTitle">Готов ловить?</h2>
+      <p id="ovText">Двигай персонажа мышкой, пальцем или стрелками. Лови еду — пропускай тараканов. Пропустишь еду или поймаешь таракана — теряешь жизнь. Скорость растёт со временем.</p>
+      <div class="reward-line" id="ovReward" style="display:none"></div>
+      <button id="startBtn">Играть</button>
+    </div>
+  </div>
+
+  <div class="controls-hint">← → или A/D · мышь · тач</div>
+
+  <details class="settings">
+    <summary>Настройки <span class="chev">▾</span></summary>
+    <div class="settings-body">
+      <div class="field">
+        <label>Персонаж (что ловит)</label>
+        <input type="text" id="setPlayer" value="🧑‍🍳" maxlength="4">
+        <div class="desc">Любой эмодзи. Он стоит внизу и ловит падающее.</div>
+      </div>
+      <div class="field">
+        <label>Что ловить (хорошее) — через пробел</label>
+        <input type="text" id="setGood" value="🍕 🍔 🌮 🍩 🍦 🍟">
+        <div class="desc">Поймал — плюс балл. Пропустил — минус жизнь.</div>
+      </div>
+      <div class="field">
+        <label>Что пропускать (плохое) — через пробел</label>
+        <input type="text" id="setBad" value="🪳 🐛 🦟">
+        <div class="desc">Поймал — минус жизнь. Пропустил — ничего страшного.</div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Награда за 1 балл</label>
+          <input type="text" id="setRewardPerPoint" value="10" inputmode="numeric">
+          <div class="desc">Сколько коинов/билетиков даёт один пойманный предмет. Уходит на бэк.</div>
+        </div>
+        <div class="field">
+          <label>Название награды</label>
+          <input type="text" id="setRewardType" value="Билетики">
+          <div class="desc">Как показывать: «Коины», «Билетики» и т.п.</div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Жизни</label>
+          <input type="text" id="setLives" value="3" inputmode="numeric">
+        </div>
+        <div class="field">
+          <label>Сложность</label>
+          <div class="diff" id="diffBtns">
+            <button data-diff="chill">Спокойно</button>
+            <button data-diff="normal" class="on">Обычно</button>
+            <button data-diff="hard">Жёстко</button>
+          </div>
+        </div>
+      </div>
+      <button class="ghost apply" id="applyBtn">Применить и начать заново</button>
+    </div>
+  </details>
+</div>
+
+<script>
+  // Подпись награды — сумму всё равно считает сервер, это только UI
+  window.PIZZA_CATCH_CONFIG = { rewardType: "Коины", rewardPerPoint: 2, lives: 3, difficulty: "normal" };
+</script>
+<script type="module">
+  import { GgSession, sendGameLoaded } from './sdk/index.js';
+
+  // хост держит нативный лоадер до этого сигнала
+  sendGameLoaded();
+
+  const CONNECTOR = 'https://1ac9-5-152-127-109.ngrok-free.app';
+  const fetchImpl = (url, init = {}) =>
+    fetch(url, { ...init, headers: { ...(init.headers ?? {}), 'ngrok-skip-browser-warning': '1' } });
+
+  const real = new URLSearchParams(location.search).has('UID');
+  const launchParams = real
+    ? location.search
+    : `?AuthDate=${Math.floor(Date.now() / 1000)}&UID=019fa7c84436780aa86aca62a3ac9009&Username=Browser&signature=demo`;
+
+  let session = null;
+
+  // игра зовёт эти хуки: старт партии и каждый пойманный предмет
+  window.GG_START = () => {
+    session = GgSession.init('pizza-catch', { connectorUrl: CONNECTOR, launchParams, fetchImpl });
+    session.then(s => s.track('run_started')).catch(e => console.warn('gg init failed', e));
+  };
+  window.GG_TRACK = (type, payload) => {
+    session?.then(s => s.track(type, payload)).catch(() => {});
+  };
+
+  // конец партии: отдаём счёт и показываем вердикт сервера
+  document.addEventListener('pizzacatch:finish', async (e) => {
+    if (!session) return;
+    const score = e.detail.score;
+    try {
+      const s = await session;
+      s.track('run_ended', { score });
+      const v = await s.finish();
+      const box = document.createElement('div');
+      box.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:99;padding:14px 16px;border-radius:12px;text-align:center;font:700 15px/1.4 system-ui,sans-serif;color:#fff;background:' + (v.status === 'accepted' ? '#2e7d32' : '#c62828');
+      box.textContent = v.status === 'accepted'
+        ? `✅ Сервер подтвердил счёт ${v.serverScore}: начислено ${v.reward.points}`
+        : `⛔ Отклонено: ${v.rejectReason}`;
+      document.body.appendChild(box);
+      setTimeout(() => box.remove(), 8000);
+    } catch (err) {
+      console.warn('gg finish failed', err);
+    } finally {
+      session = null;
+    }
+  });
+</script>
+<script>
+(() => {
+  "use strict";
+
+  /* =========================================================================
+     ИНТЕГРАЦИЯ С БЭКОМ — см. README.md
+     1) Конфиг можно задать снаружи ДО загрузки скрипта:
+          window.PIZZA_CATCH_CONFIG = { rewardPerPoint: 25, rewardType: "Коины", ... }
+     2) По окончании игры отдаём результат тремя способами (любой на выбор):
+          - колбэк   window.PizzaCatch.onFinish(payload)
+          - событие  document → "pizzacatch:finish"  (e.detail === payload)
+          - postMessage родителю (для iframe): { type:"pizzacatch:finish", payload }
+        payload = { score, rewardPerPoint, totalReward, rewardType, difficulty, durationSec }
+     ========================================================================= */
+
+  const DEFAULTS = {
+    player: "🧑‍🍳",
+    good: ["🍕","🍔","🌮","🍩","🍦","🍟"],
+    bad:  ["🪳","🐛","🦟"],
+    lives: 3,
+    rewardPerPoint: 10,      // сколько коинов/билетиков за 1 балл — отдаётся на бэк
+    rewardType: "Билетики",  // подпись награды
+    difficulty: "normal",    // chill | normal | hard
+  };
+  const cfg = Object.assign({}, DEFAULTS, (window.PIZZA_CATCH_CONFIG || {}));
+
+  const DIFF = {
+    chill:  {baseSpeed:100, speedGrowth:4,  spawnEvery:1.05, minSpawn:0.45, badChance:0.22},
+    normal: {baseSpeed:130, speedGrowth:6,  spawnEvery:0.85, minSpawn:0.32, badChance:0.28},
+    hard:   {baseSpeed:170, speedGrowth:9,  spawnEvery:0.62, minSpawn:0.24, badChance:0.34},
+  };
+  let currentDiff = DIFF[cfg.difficulty] ? cfg.difficulty : "normal";
+  Object.assign(cfg, DIFF[currentDiff]);
+
+  // публичный неймспейс для бэка
+  window.PizzaCatch = window.PizzaCatch || {};
+  if(typeof window.PizzaCatch.onFinish !== "function") window.PizzaCatch.onFinish = null;
+
+  const field   = document.getElementById("field");
+  const overlay = document.getElementById("overlay");
+  const ovTitle = document.getElementById("ovTitle");
+  const ovText  = document.getElementById("ovText");
+  const ovReward= document.getElementById("ovReward");
+  const startBtn= document.getElementById("startBtn");
+  const scoreEl = document.getElementById("score");
+  const rewardEl= document.getElementById("reward");
+  const rewardLabelEl = document.getElementById("rewardLabel");
+  const livesEl = document.getElementById("lives");
+
+  let W=0,H=0;
+  function resize(){
+    W=field.clientWidth; H=Math.round(W*1.25);
+    field.style.height=H+"px";
+    player.y=H-46;
+    player.x=Math.min(Math.max(player.x,player.r),W-player.r);
+  }
+
+  const player={x:0,y:0,r:34,targetX:null,el:null,glow:null};
+  player.glow=document.createElement("div"); player.glow.className="player-glow"; field.appendChild(player.glow);
+  player.el=document.createElement("div"); player.el.className="sprite player"; player.el.style.fontSize="48px"; player.el.textContent=cfg.player; field.appendChild(player.el);
+  const floor=document.createElement("div"); floor.className="floor"; field.appendChild(floor);
+
+  let items=[],particles=[];
+  let running=false,over=false;
+  let score=0,lives=3,elapsed=0,spawnTimer=0,last=0;
+
+  function rewardPerPoint(){ const n=parseInt(cfg.rewardPerPoint,10); return isNaN(n)?0:n; }
+  function totalReward(){ return score*rewardPerPoint(); }
+
+  function makeSprite(emoji,size){
+    const el=document.createElement("div"); el.className="sprite";
+    el.style.fontSize=size+"px"; el.textContent=emoji; field.appendChild(el); return el;
+  }
+  const place=(el,x,y)=>{ el.style.transform="translate("+x+"px,"+y+"px) translate(-50%,-50%)"; };
+
+  function clearField(){ for(const it of items) it.el.remove(); for(const p of particles) p.el.remove(); items=[]; particles=[]; }
+
+  function reset(){
+    clearField();
+    score=0; elapsed=0; spawnTimer=0; lives=cfg.lives; over=false;
+    player.x=W/2; player.targetX=null; player.el.textContent=cfg.player;
+    rewardLabelEl.textContent=cfg.rewardType;
+    updateHUD(); syncPlayer();
+  }
+  function updateHUD(){
+    scoreEl.textContent=score;
+    rewardEl.textContent=totalReward();
+    livesEl.textContent=lives>0?"❤".repeat(lives):"—";
+  }
+
+  function currentSpeed(){ return cfg.baseSpeed+cfg.speedGrowth*elapsed; }
+  function currentSpawn(){ return Math.max(cfg.minSpawn, cfg.spawnEvery-elapsed*0.012); }
+
+  function spawn(){
+    const isBad=Math.random()<cfg.badChance;
+    const pool=isBad?cfg.bad:cfg.good; if(!pool.length) return;
+    const emoji=pool[(Math.random()*pool.length)|0], r=22;
+    const el=makeSprite(emoji,40);
+    items.push({x:r+Math.random()*(W-2*r),y:-r,r,emoji,bad:isBad,
+      vy:currentSpeed()*(0.9+Math.random()*0.25),wobble:Math.random()*Math.PI*2,el});
+  }
+
+  function burst(x,y,color){
+    for(let i=0;i<9;i++){
+      const a=Math.random()*Math.PI*2,s=60+Math.random()*120;
+      const el=document.createElement("div"); el.className="spark"; el.style.background=color; field.appendChild(el);
+      particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-40,life:0.5,max:0.5,el});
+    }
+  }
+  function loseLife(){ lives--; updateHUD(); if(lives<=0) gameOver(); }
+
+  function finishPayload(){
+    return {
+      score,
+      rewardPerPoint: rewardPerPoint(),
+      totalReward: totalReward(),
+      rewardType: cfg.rewardType,
+      difficulty: currentDiff,
+      durationSec: Math.round(elapsed),
+    };
+  }
+  function emitFinish(){
+    const payload=finishPayload();
+    try{ if(typeof window.PizzaCatch.onFinish==="function") window.PizzaCatch.onFinish(payload); }catch(e){ console.error(e); }
+    try{ document.dispatchEvent(new CustomEvent("pizzacatch:finish",{detail:payload})); }catch(e){}
+    try{ if(window.parent && window.parent!==window) window.parent.postMessage({type:"pizzacatch:finish",payload},"*"); }catch(e){}
+  }
+
+  function gameOver(){
+    running=false; over=true;
+    updateHUD();
+    ovTitle.textContent="Игра окончена";
+    ovText.textContent="Ты набрал "+score+" баллов.";
+    ovReward.style.display="block";
+    ovReward.textContent="Награда: "+totalReward()+" "+cfg.rewardType.toLowerCase();
+    overlay.querySelector(".big").textContent="😵";
+    startBtn.textContent="Ещё раз";
+    overlay.classList.remove("hidden");
+    emitFinish();
+  }
+
+  const keys={left:false,right:false};
+  window.addEventListener("keydown",e=>{
+    if(e.key==="ArrowLeft"||e.key==="a"||e.key==="A") keys.left=true;
+    if(e.key==="ArrowRight"||e.key==="d"||e.key==="D") keys.right=true;
+    if((e.key===" "||e.key==="Enter")&&!running) startGame();
+  });
+  window.addEventListener("keyup",e=>{
+    if(e.key==="ArrowLeft"||e.key==="a"||e.key==="A") keys.left=false;
+    if(e.key==="ArrowRight"||e.key==="d"||e.key==="D") keys.right=false;
+  });
+  function pointerMove(cx){ const rect=field.getBoundingClientRect(); player.targetX=cx-rect.left; }
+  field.addEventListener("mousemove",e=>pointerMove(e.clientX));
+  field.addEventListener("touchstart",e=>{pointerMove(e.touches[0].clientX);e.preventDefault();},{passive:false});
+  field.addEventListener("touchmove", e=>{pointerMove(e.touches[0].clientX);e.preventDefault();},{passive:false});
+
+  function update(dt){
+    elapsed+=dt;
+    const kb=380;
+    if(keys.left){ player.x-=kb*dt; player.targetX=null; }
+    if(keys.right){ player.x+=kb*dt; player.targetX=null; }
+    if(player.targetX!=null) player.x+=(player.targetX-player.x)*Math.min(1,dt*14);
+    player.x=Math.min(Math.max(player.x,player.r),W-player.r);
+
+    spawnTimer-=dt; if(spawnTimer<=0){ spawn(); spawnTimer=currentSpawn(); }
+
+    for(let i=items.length-1;i>=0;i--){
+      const it=items[i]; it.y+=it.vy*dt; it.wobble+=dt*4; it.x+=Math.sin(it.wobble)*8*dt;
+      const catchY=player.y-player.r*0.5;
+      if(it.y+it.r>catchY && Math.abs(it.x-player.x)<player.r+it.r*0.6 && it.y<player.y+player.r){
+        if(it.bad){ loseLife(); burst(it.x,it.y,"#ff5d73"); }
+        else { score+=1; burst(it.x,it.y,"#ffd45e"); window.GG_TRACK && window.GG_TRACK("catch", { n: score, emoji: it.el.textContent }); }
+        it.el.remove(); items.splice(i,1); updateHUD(); continue;
+      }
+      if(it.y-it.r>H){
+        it.el.remove(); items.splice(i,1);
+        if(!it.bad){ burst(it.x,H-6,"#6b5a8a"); loseLife(); }
+        continue;
+      }
+      place(it.el,it.x,it.y);
+    }
+    for(let i=particles.length-1;i>=0;i--){
+      const p=particles[i]; p.life-=dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=300*dt;
+      if(p.life<=0){ p.el.remove(); particles.splice(i,1); continue; }
+      p.el.style.opacity=Math.max(0,p.life/p.max); place(p.el,p.x,p.y);
+    }
+  }
+  function syncPlayer(){ place(player.el,player.x,player.y); place(player.glow,player.x,player.y); }
+  function loop(ts){
+    if(!running) return;
+    if(!last) last=ts;
+    let dt=(ts-last)/1000; last=ts; if(dt>0.05) dt=0.05;
+    update(dt); syncPlayer(); requestAnimationFrame(loop);
+  }
+  function startGame(){
+    window.GG_START && window.GG_START();
+    reset(); ovReward.style.display="none";
+    overlay.classList.add("hidden"); running=true; last=0;
+    requestAnimationFrame(loop);
+  }
+  startBtn.addEventListener("click",startGame);
+  window.PizzaCatch.start=startGame;                       // бэк может запустить программно
+  window.PizzaCatch.getConfig=()=>Object.assign({},cfg);   // и прочитать текущий конфиг
+
+  const el=id=>document.getElementById(id);
+  const setPlayer=el("setPlayer"),setGood=el("setGood"),setBad=el("setBad"),
+        setRPP=el("setRewardPerPoint"),setRType=el("setRewardType"),
+        setLives=el("setLives"),applyBtn=el("applyBtn"),diffBtns=el("diffBtns");
+
+  // проставим значения из конфига в поля настроек
+  setPlayer.value=cfg.player; setGood.value=cfg.good.join(" "); setBad.value=cfg.bad.join(" ");
+  setRPP.value=cfg.rewardPerPoint; setRType.value=cfg.rewardType; setLives.value=cfg.lives;
+  [...diffBtns.children].forEach(x=>x.classList.toggle("on",x.dataset.diff===currentDiff));
+
+  const splitEmojis=s=>s.trim().split(/\s+/).filter(Boolean);
+  diffBtns.addEventListener("click",e=>{
+    const b=e.target.closest("button"); if(!b) return;
+    currentDiff=b.dataset.diff;
+    [...diffBtns.children].forEach(x=>x.classList.toggle("on",x===b));
+  });
+  function applySettings(){
+    cfg.player=setPlayer.value.trim()||"🧑‍🍳";
+    const g=splitEmojis(setGood.value); if(g.length) cfg.good=g;
+    cfg.bad=splitEmojis(setBad.value);
+    cfg.rewardPerPoint=setRPP.value.trim()||"0";
+    cfg.rewardType=setRType.value.trim()||"Награда";
+    const lv=parseInt(setLives.value,10); cfg.lives=(isNaN(lv)||lv<1)?3:Math.min(lv,9);
+    Object.assign(cfg,DIFF[currentDiff]);
+    overlay.querySelector(".big").textContent=cfg.good[0]||"🍕";
+    ovTitle.textContent="Готов ловить?";
+    ovText.textContent="Двигай персонажа мышкой, пальцем или стрелками. Лови еду — пропускай тараканов.";
+    startBtn.textContent="Играть";
+    startGame();
+  }
+  applyBtn.addEventListener("click",applySettings);
+
+  window.addEventListener("resize",resize);
+  resize(); reset();
+})();
+</script>
+</body>
+</html>
