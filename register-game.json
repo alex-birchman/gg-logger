@@ -1,0 +1,12 @@
+{
+  "id": "e57fb59d-9239-4b67-b3d9-1fc86dbfd39f",
+  "name": "GG Logger",
+  "url": "https://alex-birchman.github.io/gg-logger/",
+  "businessId": "DodoPizza",
+  "countryId": 643,
+  "isActive": true,
+  "buttons": [
+    { "color": "#FFFFFF", "position": "Leading" }
+  ],
+  "icons": []
+}

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>GG Demo Game</title>
+<style>
+  body { margin: 0; font: 16px/1.5 -apple-system, system-ui, sans-serif; background: #1a1208; color: #ffe8c2;
+         padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); }
+  h2 { margin: 8px 0 4px; }
+  .muted { color: #b09468; font-size: 13px; }
+  .score { font-size: 64px; font-weight: 800; text-align: center; margin: 24px 0; }
+  .btns { display: flex; flex-direction: column; gap: 12px; }
+  button { font: inherit; font-weight: 600; border: 0; border-radius: 12px; padding: 16px; color: #fff; }
+  #tap { background: #e6791e; font-size: 20px; }
+  #cheat { background: #7b1f1f; }
+  #finish { background: #2e7d32; }
+  #again { background: #444; display: none; }
+  #verdict { margin-top: 20px; padding: 16px; border-radius: 12px; display: none; white-space: pre-wrap; word-break: break-all; font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+  #verdict.ok { display: block; background: #10310f; border: 1px solid #2e7d32; }
+  #verdict.bad { display: block; background: #331010; border: 1px solid #7b1f1f; }
+  #status { font-size: 13px; color: #b09468; margin-top: 12px; min-height: 1.5em; }
+</style>
+</head>
+<body>
+<h2>🍕 GG Demo Game</h2>
+<div class="muted" id="player">подключаюсь к коннектору…</div>
+<div class="score" id="score">0</div>
+<div class="btns">
+  <button id="tap">ТАП — поставить коробку</button>
+  <button id="cheat">😈 Читер: заявить 100500</button>
+  <button id="finish">Завершить партию → вердикт сервера</button>
+  <button id="again">Ещё партия</button>
+</div>
+<div id="verdict"></div>
+<div id="status"></div>
+<script type="module">
+import { GgSession, sendGameLoaded } from './sdk/index.js';
+
+// лоадер приложения гасим сразу, даже если коннектор недоступен
+sendGameLoaded();
+
+const CONNECTOR = 'https://counting-meditation-wins-data.trycloudflare.com';
+const $ = (id) => document.getElementById(id);
+const status = (m) => { $('status').textContent = m; };
+
+// на телефоне параметры дописывает приложение; в обычном браузере — подделка для отладки
+const real = new URLSearchParams(location.search).has('UID');
+const launchParams = real
+  ? location.search
+  : `?AuthDate=${Math.floor(Date.now() / 1000)}&UID=019fa7c84436780aa86aca62a3ac9009&Username=Browser&signature=demo`;
+
+let session;
+let n = 0;
+let size = 1.5;
+
+async function newRun() {
+  n = 0;
+  size = 1.5;
+  $('score').textContent = '0';
+  $('verdict').className = '';
+  $('again').style.display = 'none';
+  status('открываю сессию…');
+  session = await GgSession.init('pizza-tower', { connectorUrl: CONNECTOR, launchParams });
+  session.track('run_started');
+  $('player').textContent = `игрок: ${session.player.username ?? session.player.clientId}`
+    + (real ? ' (identity от приложения ✅)' : ' (identity подделана браузером)');
+  status('сессия открыта, играй!');
+}
+
+$('tap').onclick = () => {
+  const overhang = Math.random() * 0.2;
+  const cut = overhang / size > 0.05;
+  n++;
+  session.track('tap', { boxSize: [size, 0.25, size], overhang, cut, n });
+  if (cut) size -= overhang;
+  $('score').textContent = String(n);
+};
+
+$('cheat').onclick = () => {
+  n = 100500;
+  $('score').textContent = '100500';
+  status('счёт подделан — сервер сейчас это заметит…');
+};
+
+$('finish').onclick = async () => {
+  status('спрашиваю вердикт сервера…');
+  session.track('run_ended', { reason: 0, score: n });
+  try {
+    const v = await session.finish();
+    const box = $('verdict');
+    box.className = v.status === 'accepted' ? 'ok' : 'bad';
+    box.textContent = v.status === 'accepted'
+      ? `✅ Сервер подтвердил: счёт ${v.serverScore}, начислено ${v.reward.points} очков кампании`
+      : `⛔ Отклонено: ${v.rejectReason}\nзаявлено ${v.claimedScore}, сервер насчитал ${v.serverScore}, награда 0`;
+    status('');
+    $('again').style.display = 'block';
+  } catch (e) {
+    status(`ошибка finish: ${e.message}`);
+  }
+};
+
+$('again').onclick = () => newRun().catch(e => status(`ошибка: ${e.message}`));
+
+newRun().catch(e => status(`не достучался до коннектора: ${e.message}`));
+</script>
+</body>
+</html>
