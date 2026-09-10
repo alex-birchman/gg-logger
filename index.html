@@ -19,6 +19,7 @@
 <body>
 <header>
   <h1>🕵️ GG Logger</h1>
+  <button onclick="sendGameLoaded()" style="background:#1565c0">gameLoaded</button>
   <button onclick="copyAll()">Копировать всё</button>
 </header>
 <div id="log"></div>
@@ -129,6 +130,20 @@ const timer = setInterval(() => {
   scanWebkit();
   if (++ticks >= 30) { clearInterval(timer); log('UI', 'скан завершён', { entries: entries.length }); }
 }, 500);
+
+// ── 7. Сообщить хосту, что «игра» загрузилась (иначе вечный лоадер) ──
+function sendGameLoaded() {
+  try { window.JSBridge && window.JSBridge.gameLoaded && (window.JSBridge.gameLoaded(), log('OUT', 'JSBridge.gameLoaded()', 'отправлено')); } catch (e) { log('OUT', 'JSBridge.gameLoaded()', String(e)); }
+  try {
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.gameLoaded) {
+      window.webkit.messageHandlers.gameLoaded.postMessage('');
+      log('OUT', 'webkit gameLoaded.postMessage', 'отправлено');
+    }
+  } catch (e) { log('OUT', 'webkit gameLoaded', String(e)); }
+  try { window.parent !== window && (window.parent.postMessage(JSON.stringify({ event: 'gameLoaded' }), '*'), log('OUT', 'parent.postMessage gameLoaded', 'отправлено')); } catch (e) { log('OUT', 'parent.postMessage', String(e)); }
+}
+setTimeout(sendGameLoaded, 800);
+setTimeout(sendGameLoaded, 3000); // мост мог инжектнуться позже первой попытки
 
 log('UI', 'логгер готов', 'жду вызовов от приложения…');
 </script>
