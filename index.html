@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>GG Logger</title>
+<style>
+  body { margin: 0; font: 12px/1.5 ui-monospace, Menlo, monospace; background: #111; color: #d6ffd6; }
+  header { position: sticky; top: 0; background: #1c1c1c; padding: 10px 12px; display: flex; gap: 8px; align-items: center; border-bottom: 1px solid #333; }
+  h1 { font-size: 14px; margin: 0; flex: 1; color: #fff; }
+  button { font: inherit; background: #2e7d32; color: #fff; border: 0; border-radius: 6px; padding: 8px 12px; }
+  #log { padding: 10px 12px 60px; word-break: break-all; white-space: pre-wrap; }
+  .e { border-bottom: 1px dashed #333; padding: 4px 0; }
+  .t { color: #7aa2f7; }
+  .k { color: #ffd166; font-weight: bold; }
+  .bridge { color: #ff6b6b; font-weight: bold; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🕵️ GG Logger</h1>
+  <button onclick="copyAll()">Копировать всё</button>
+</header>
+<div id="log"></div>
+<script>
+const entries = [];
+const logEl = document.getElementById('log');
+
+function log(kind, name, data) {
+  const e = { t: new Date().toISOString().slice(11, 23), kind, name, data };
+  entries.push(e);
+  const div = document.createElement('div');
+  div.className = 'e';
+  const cls = kind === 'BRIDGE' ? 'bridge' : 'k';
+  div.innerHTML = `<span class="t">${e.t}</span> <span class="${cls}">[${kind}] ${name}</span> ${escapeHtml(safeJson(data))}`;
+  logEl.appendChild(div);
+  window.scrollTo(0, document.body.scrollHeight);
+}
+
+function safeJson(x) {
+  if (x === undefined) return '';
+  try { return JSON.stringify(x, (k, v) => typeof v === 'function' ? `[fn ${v.name || 'anon'}]` : v, 1); }
+  catch (err) { return String(x); }
+}
+function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+
+function copyAll() {
+  const text = entries.map(e => `${e.t} [${e.kind}] ${e.name} ${safeJson(e.data)}`).join('\n');
+  (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject())
+    .then(() => log('UI', 'copied', { chars: text.length }))
+    .catch(() => { prompt('Скопируй вручную:', text); });
+}
+
+// ── 1. Окружение ─────────────────────────────────────────────
+log('ENV', 'url', location.href);
+log('ENV', 'search', location.search || '(пусто)');
+log('ENV', 'hash', location.hash || '(пусто)');
+log('ENV', 'referrer', document.referrer || '(пусто)');
+log('ENV', 'userAgent', navigator.userAgent);
+log('ENV', 'cookies', document.cookie || '(пусто)');
+try { log('ENV', 'localStorage keys', Object.keys(localStorage)); } catch (e) { log('ENV', 'localStorage', 'недоступен'); }
+
+// ── 2. Хуки моста: приложение может вызвать эти функции ──────
+['initGame', 'startGame', 'endGame', 'gameLoaded', 'setToken', 'setUser', 'init', 'configure'].forEach(name => {
+  window[name] = function () { log('BRIDGE', `window.${name}() вызван приложением`, [...arguments]); };
+});
+
+// ── 3. postMessage от хоста ──────────────────────────────────
+window.addEventListener('message', ev => {
+  log('BRIDGE', `postMessage (origin: ${ev.origin})`, ev.data);
+});
+
+// ── 4. Инжект-объекты: diff window против чистого iframe ─────
+const iframe = document.createElement('iframe');
+iframe.style.display = 'none';
+document.body.appendChild(iframe);
+const cleanKeys = new Set(Object.getOwnPropertyNames(iframe.contentWindow));
+const ourKeys = new Set(['entries', 'log', 'safeJson', 'escapeHtml', 'copyAll', 'copyAllBtn',
+  'initGame', 'startGame', 'endGame', 'gameLoaded', 'setToken', 'setUser', 'init', 'configure']);
+const reported = new Set();
+
+function scanInjected(label) {
+  Object.getOwnPropertyNames(window).forEach(k => {
+    if (cleanKeys.has(k) || ourKeys.has(k) || reported.has(k)) return;
+    reported.add(k);
+    const v = window[k];
+    let detail;
+    if (v && typeof v === 'object') {
+      try { detail = { type: 'object', keys: Object.getOwnPropertyNames(v), snapshot: v }; }
+      catch (e) { detail = { type: 'object', error: String(e) }; }
+    } else {
+      detail = { type: typeof v, value: typeof v === 'function' ? '[function]' : v };
+    }
+    log('INJECT', `${label}: window.${k}`, detail);
+    // если это похоже на бридж — обернуть его методы логированием
+    if (v && typeof v === 'object') wrapMethods(k, v);
+  });
+}
+
+function wrapMethods(objName, obj) {
+  try {
+    Object.getOwnPropertyNames(obj).forEach(m => {
+      if (typeof obj[m] !== 'function') return;
+      const orig = obj[m].bind(obj);
+      obj[m] = function () { log('BRIDGE', `${objName}.${m}() вызван`, [...arguments]); return orig(...arguments); };
+    });
+  } catch (e) { /* нативные объекты могут не даться — ок */ }
+}
+
+// ── 5. iOS: webkit.messageHandlers ───────────────────────────
+function scanWebkit() {
+  try {
+    if (window.webkit && window.webkit.messageHandlers) {
+      const names = Object.getOwnPropertyNames(window.webkit.messageHandlers);
+      if (!reported.has('__webkit')) { reported.add('__webkit'); log('INJECT', 'webkit.messageHandlers', names); }
+    }
+  } catch (e) { /* ignore */ }
+}
+
+// ── 6. Ошибки ────────────────────────────────────────────────
+window.addEventListener('error', ev => log('ERR', ev.message, { src: ev.filename, line: ev.lineno }));
+
+// Мост может инжектиться ПОСЛЕ загрузки страницы — сканируем 15 сек
+scanInjected('на старте');
+scanWebkit();
+let ticks = 0;
+const timer = setInterval(() => {
+  scanInjected('позже');
+  scanWebkit();
+  if (++ticks >= 30) { clearInterval(timer); log('UI', 'скан завершён', { entries: entries.length }); }
+}, 500);
+
+log('UI', 'логгер готов', 'жду вызовов от приложения…');
+</script>
+</body>
+</html>
