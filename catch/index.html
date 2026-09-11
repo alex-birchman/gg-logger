@@ -151,7 +151,9 @@
 
 <script>
   // Подпись награды — сумму всё равно считает сервер, это только UI
-  window.PIZZA_CATCH_CONFIG = { rewardType: "Коины", rewardPerPoint: 2, lives: 3, difficulty: "normal" };
+  // rewardPerPoint: 1 — иначе игра рисует свою награду со своим множителем, и она
+  // расходится с вердиктом сервера. Сумму называет сервер, клиент только отображает.
+  window.PIZZA_CATCH_CONFIG = { rewardType: "Коины", rewardPerPoint: 1, lives: 3, difficulty: "normal" };
 </script>
 <script type="module">
   import { GgSession, sendGameLoaded } from './sdk/index.js';
