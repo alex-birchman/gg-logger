@@ -31,3 +31,4 @@ export function sendGameLoaded(win) {
         /* ignore */
     }
 }
+//# sourceMappingURL=bridge.js.map
